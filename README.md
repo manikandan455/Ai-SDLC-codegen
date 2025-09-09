@@ -41,6 +41,6 @@ This demonstrates how AI can *accelerate software development* and support *SDLC
 
 ## 📂 Project Structure
 ai-sdlc-codegen/
-│── README.md                 # Project documentation (full details of project)
-│── requirements.txt          # Dependencies list
-│── ai_sdlc_codegen.ipynb     # Google Colab Notebook (main project code)
+│── README.md                 
+│── requirements.txt          
+│── ai_sdlc_codegen.ipynb     
