@@ -1,90 +1,73 @@
-
-# ===============================
-# 0. Install dependencies
-# ===============================
-!pip install -q transformers accelerate torch gradio PyPDF2 huggingface_hub
+# Install dependencies
+!pip install transformers torch gradio PyPDF2 -q
 
 import gradio as gr
 import torch
-import PyPDF2
-import os
-from huggingface_hub import login
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import PyPDF2  # <-- add this
+import io
 
-# 1. Get token from GitHub Actions secret
-hf_token = os.getenv("HF_TOKEN")
+# Load model and tokenizer
+model_name = "ibm-granite/granite-3.2-2b-instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+    device_map="auto" if torch.cuda.is_available() else None
+)
 
-# 2. Login to Hugging Face
-login(token=hf_token)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
 
-print("✅ Hugging Face login success")
-
-# 3. Now you can load models safely
-model_name = "ibm-granite/granite-3.2-2"
-tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
-model = AutoModelForCausalLM.from_pretrained(model_name, token=hf_token)
-
-print("✅ Model loaded successfully")
-
-# ===============================
-# 3. Helper Functions
-# ===============================
-def generate_response(prompt, max_length=400):
-    try:
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+def generate_response(prompt, max_length=1024):
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+    if torch.cuda.is_available():
         inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_length,
-                temperature=0.7,
-                do_sample=True,
-                pad_token_id=tokenizer.eos_token_id
-            )
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return response.replace(prompt, "").strip()
-    except Exception as e:
-        return f"⚠️ Error: {str(e)}"
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_length=max_length,
+            temperature=0.7,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id
+        )
+
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    response = response.replace(prompt, "").strip()
+    return response
 
 def extract_text_from_pdf(pdf_file):
     if pdf_file is None:
         return ""
     try:
-        reader = PyPDF2.PdfReader(pdf_file.name)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
         text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-        return text.strip()
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        return text
     except Exception as e:
-        return f"⚠️ Error reading PDF: {str(e)}"
+        return f"Error reading PDF: {str(e)}"
 
 def requirement_analysis(pdf_file, prompt_text):
-    content = extract_text_from_pdf(pdf_file) if pdf_file else prompt_text
-    analysis_prompt = (
-        "Analyze the following requirements and organize them into:\n"
-        "- Functional Requirements\n"
-        "- Non-Functional Requirements\n"
-        "- Technical Specifications\n\n"
-        f"{content}"
-    )
-    return generate_response(analysis_prompt, max_length=400)
+    if pdf_file is not None:
+        content = extract_text_from_pdf(pdf_file)
+        analysis_prompt = f"Analyze the following document and extract key software requirements. Organize them into functional requirements, non-functional requirements, and technical specifications:\n\n{content}"
+    else:
+        analysis_prompt = f"Analyze the following requirements and organize them into functional requirements, non-functional requirements, and technical specifications:\n\n{prompt_text}"
+
+    return generate_response(analysis_prompt, max_length=1200)
 
 def code_generation(prompt, language):
     code_prompt = f"Generate {language} code for the following requirement:\n\n{prompt}\n\nCode:"
-    return generate_response(code_prompt, max_length=400)
+    return generate_response(code_prompt, max_length=1200)
 
-# ===============================
-# 4. Gradio App
-# ===============================
+# Gradio interface
 with gr.Blocks() as app:
-    gr.Markdown("# 🚀 AI SDLC Project: Requirement Analysis & Code Generator")
+    gr.Markdown("# AI Code Analysis & Generator")
 
     with gr.Tabs():
-        # Requirements Analysis
-        with gr.TabItem("Requirements Analysis"):
+        with gr.TabItem("Code Analysis"):
             with gr.Row():
                 with gr.Column():
                     pdf_upload = gr.File(label="Upload PDF", file_types=[".pdf"])
@@ -94,11 +77,12 @@ with gr.Blocks() as app:
                         lines=5
                     )
                     analyze_btn = gr.Button("Analyze")
+
                 with gr.Column():
                     analysis_output = gr.Textbox(label="Requirements Analysis", lines=20)
+
             analyze_btn.click(requirement_analysis, inputs=[pdf_upload, prompt_input], outputs=analysis_output)
 
-        # Code Generation
         with gr.TabItem("Code Generation"):
             with gr.Row():
                 with gr.Column():
@@ -113,11 +97,10 @@ with gr.Blocks() as app:
                         value="Python"
                     )
                     generate_btn = gr.Button("Generate Code")
+
                 with gr.Column():
                     code_output = gr.Textbox(label="Generated Code", lines=20)
+
             generate_btn.click(code_generation, inputs=[code_prompt, language_dropdown], outputs=code_output)
 
-# ===============================
-# 5. Launch App
-# ===============================
-app.launch(share=True)
+app.launch(share=True, debug=True)
