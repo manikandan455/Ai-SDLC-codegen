@@ -13,7 +13,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 # 1. Set Hugging Face Token
 # ===============================
 # Replace with your OWN token from https://huggingface.co/settings/tokens
-HF_TOKEN = "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"
+HF_TOKEN = "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"
 
 # ===============================
 # 2. Load Granite Model (PRIVATE)
