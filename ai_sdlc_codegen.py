@@ -25,7 +25,7 @@ from huggingface_hub import login
 # 1. Authenticate Hugging Face
 # ===============================
 # Replace with your token
-login("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")
+login("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")
 
 # ===============================
 # 2. Load Granite Model
