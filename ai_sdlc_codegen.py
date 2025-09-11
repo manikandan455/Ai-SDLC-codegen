@@ -7,29 +7,24 @@
 import gradio as gr
 import torch
 import PyPDF2
+import os
+from huggingface_hub import login
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# ===============================
-# 1. Set Hugging Face Token
-# ===============================
-# Replace with your OWN token from https://huggingface.co/settings/tokens
-HF_TOKEN = "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"
+# 1. Get token from GitHub Actions secret
+hf_token = os.getenv("HF_TOKEN")
 
-# ===============================
-# 2. Load Granite Model (PRIVATE)
-# ===============================
-model_name = "ibm-granite/granite-3.2-2b-instruct"
+# 2. Login to Hugging Face
+login(token=hf_token)
 
-tokenizer = AutoTokenizer.from_pretrained(model_name, token=HF_TOKEN)
-model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    token=HF_TOKEN,
-    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-    device_map="auto" if torch.cuda.is_available() else None
-)
+print("✅ Hugging Face login success")
 
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+# 3. Now you can load models safely
+model_name = "ibm-granite/granite-3.2-2"
+tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+model = AutoModelForCausalLM.from_pretrained(model_name, token=hf_token)
+
+print("✅ Model loaded successfully")
 
 # ===============================
 # 3. Helper Functions
